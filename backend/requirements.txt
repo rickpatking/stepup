@@ -1,5 +1,34 @@
-flask==3.0.3
-flask-sqlalchemy==3.1.1
-sqlalchemy==2.0.34
-pyjwt==2.9.0
-python-dotenv==1.0.1
+# Flask Core
+Flask==2.3.3
+Flask-SQLAlchemy==3.0.5
+Flask-CORS==4.0.0
+
+# Authentication & Security
+Werkzeug==2.3.7
+PyJWT==2.8.0
+
+# Database
+SQLAlchemy==2.0.21
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Date/Time utilities (if needed)
+python-dateutil==2.8.2
+
+# Optional: Development and Testing
+# pytest==7.4.2
+# pytest-flask==1.2.0
+
+# Optional: Database drivers (uncomment as needed)
+# PostgreSQL
+# psycopg2-binary==2.9.7
+
+# MySQL
+# PyMySQL==1.1.0
+
+# Production WSGI Server (recommended for deployment)
+# gunicorn==21.2.0
+
+# Optional: Database migrations
+# Flask-Migrate==4.0.5
