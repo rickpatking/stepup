@@ -309,16 +309,65 @@ def end_journey(current_user):
 
 @app.route("/api/leaderboard", methods=["GET"])
 def leaderboard():
-    users = User.query.order_by(User.total_steps_life.desc()).limit(10).all()
-    leaderboard_data = [
-        {
-            "username": u.username,
-            "steps": u.total_steps_life,
-            "level": u.level_info.current_level if u.level_info else 1
-        }
-        for u in users
-    ]
-    return jsonify(leaderboard_data)
+    # users = User.query.order_by(User.total_steps_life.desc()).limit(10).all()
+    # leaderboard_data = [
+    #     {
+    #         "username": u.username,
+    #         "steps": u.total_steps_life,
+    #         "level": u.level_info.current_level if u.level_info else 1
+    #     }
+    #     for u in users
+    # ]
+    # return jsonify(leaderboard_data)
+    try:
+        timeframe = request.args.get('timeframe', 'all')
+        limit = min(request.args.get('limit', 10, type=int), 50)
+        if timeframe == 'day':
+            today = date.today()
+            step_logs = db.session.query(
+                StepLog.user_id,
+                db.func.sum(StepLog.steps_count).label('total_steps')
+            ).filter(StepLog.date == today).group_by(StepLog.user_id).all()
+        elif timeframe == 'week':
+            week_ago = date.today() - timedelta(days=7)
+            step_logs = db.session.query(
+                StepLog.user_id,
+                db.func.sum(StepLog.steps_count).label('total_steps')
+            ).filter(StepLog.date >= week_ago).group_by(StepLog.user_id).all()
+        elif timeframe == 'month':
+            current_month = date.today().replace(day=1)
+            step_logs = db.session.query(
+                StepLog.user_id,
+                db.func.sum(StepLog.steps_count).label('total_steps')
+            ).filter(StepLog.date >= current_month).group_by(StepLog.user_id).all()
+        else:
+            users = User.query.filter(User.total_steps_life > 0).all()
+            step_logs = [(user,id, user.total_steps_life) for user in users]
+
+        leaderboard_data = []
+        for user_id, total_steps in step_logs:
+            user = User.query.get(user_id)
+            if user and total_steps > 0:
+                user_level = UserLevel.query.filter_by(user_id=user.id).first()
+                leaderboard_data.append({
+                    'rank': 0,
+                    'username': user.username,
+                    'display_name': user.display_name or user.username,
+                    'steps': total_steps,
+                    'miles': round(total_steps/2000, 2),
+                    'level': user_level.current_level if user_level else 1
+                })
+
+        leaderboard_data.sort(key=lambda x: x['steps'], reverse=True)
+        for i, entry in enumerate(leaderboard_data[:limit]):
+            entry['rank'] = i + 1
+
+        return jsonify({
+            'timeframe': timeframe,
+            'leaderboard': leaderboard_data[:limit]
+        })
+    except Exception as e:
+        return jsonify({'message': 'Failed to get leaderboard'}), 500
 
 @app.route('/api/bosses', methods=['GET'])
 @token_required
