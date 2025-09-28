@@ -17,6 +17,7 @@ class User(db.Model):
     total_steps_life = db.Column(db.Integer, default=0, nullable=False)
     current_journey_id = db.Column(db.Integer, db.ForeignKey('journeys.id'), nullable=True)
 
+
     step_logs = db.relationship('StepLog', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     current_journey = db.relationship('Journey', foreign_keys=[current_journey_id])
 
@@ -110,6 +111,9 @@ class Journey(db.Model):
     __tablename__ = 'journeys'
     id = db.Column(db.Integer, primary_key=True)
 
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    template_id = db.Column(db.Integer, nullable=True)
+
     start_city = db.Column(db.String(100), nullable=False)
     end_city = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -121,10 +125,12 @@ class Journey(db.Model):
     difficulty = db.Column(db.String(20), default='Medium')
 
     is_active = db.Column(db.Boolean, default=True)
+    is_template = db.Column(db.Boolean, default=False)
 
     started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     finished_at = db.Column(db.DateTime, nullable=True)
+    user = db.relationship('User', backref='personal_journeys')
 
     def __init__(self, start_city, end_city, total_distance_miles, **kwargs):
         self.start_city = start_city
@@ -460,7 +466,7 @@ class UserAchievement(db.Model):
 
 DAILY_BOSS_TEMPLATES = [
     {
-        'name': 'Shadow Walker',
+        'name': 'Shadow Wolf',
         'description': 'A mysterious figure that feeds on inactivity. Defeat it with your daily steps!',
         'health': 10000,
         'exp_reward': 500
@@ -496,8 +502,8 @@ JOURNEY_BOSS_TEMPLATES = {
 
 LEGENDARY_BOSSES = [
     {
-        'name': 'The Sedentary King',
-        'description': 'The ultimate enemy of all walkers. A legendary challenge!',
+        'name': 'The Bald Miner',
+        'description': 'A grizzled underground digger who’s spent so long tunneling that he’s tougher than stone itself. He swings his oversized shovel with surprising speed, and every few steps you take chip away at his rocky defenses. His shiny bald head gleams in the torchlight—a reminder that this miner doesn’t quit digging until the fight is over.',
         'health': 1000000,
         'exp_reward': 10000,
         'difficulty': 'Legendary'
