@@ -71,21 +71,6 @@ def login():
 @app.route("/api/user/profile", methods=["GET"])
 @token_required
 def profile(current_user):
-    # token = request.headers.get("Authorization")
-    # if token and token.startswith("Bearer "):
-    #     token = token[7:]
-    # user_id = decode_token(token)
-    # if not user_id:
-    #     return jsonify({"message": "Invalid or missing token"}), 401
-    #
-    # user = User.query.get(user_id)
-    # user_level = UserLevel.query.filter_by(user_id=user.id).first()
-    # return jsonify({
-    #     "username": user.username,
-    #     "steps": user.total_steps_life,
-    #     "level": user_level.current_level if user_level else 1,
-    #     "xp": user_level.current_exp if user_level else 0
-    # })
     try:
         user_level = UserLevel.query.filter_by(user_id=current_user.id).first()
         if not user_level:
@@ -133,29 +118,6 @@ def profile(current_user):
 @app.route("/api/steps/sync", methods=["POST"])
 @token_required
 def sync_steps(current_user):
-    # token = request.headers.get("Authorization")
-    # if token and token.startswith("Bearer "):
-    #     token = token[7:]
-    # user_id = decode_token(token)
-    # if not user_id:
-    #     return jsonify({"message": "Invalid or missing token"}), 401
-    #
-    # data = request.json
-    # steps_count = data.get("steps_count", 0)
-    #
-    # user = User.query.get(user_id)
-    # user_level = UserLevel.query.filter_by(user_id=user.id).first()
-    # user.total_steps_life += steps_count
-    # level_ups = user_level.add_exp(steps_count // 100)
-    #
-    # db.session.commit()
-    #
-    # return jsonify({
-    #     "message": "Steps updated",
-    #     "total_steps": user.total_steps_life,
-    #     "level": user_level.current_level if user_level else 1,
-    #     "xp": user_level.current_exp if user_level else 0
-    # })
     try:
         data = request.json
         steps_count = data.get('steps_count', 0)
@@ -309,16 +271,6 @@ def end_journey(current_user):
 
 @app.route("/api/leaderboard", methods=["GET"])
 def leaderboard():
-    # users = User.query.order_by(User.total_steps_life.desc()).limit(10).all()
-    # leaderboard_data = [
-    #     {
-    #         "username": u.username,
-    #         "steps": u.total_steps_life,
-    #         "level": u.level_info.current_level if u.level_info else 1
-    #     }
-    #     for u in users
-    # ]
-    # return jsonify(leaderboard_data)
     try:
         timeframe = request.args.get('timeframe', 'all')
         limit = min(request.args.get('limit', 10, type=int), 50)
