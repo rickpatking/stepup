@@ -8,7 +8,8 @@ from functools import wraps
 import jwt
 import os
 
-
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(__name__)
 
 load_config(app)
