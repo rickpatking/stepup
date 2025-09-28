@@ -1,20 +1,21 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date, timedelta
-from numba.scripts.generate_lower_listing import description
-from sqlalchemy.orm import relationship
 from sqlalchemy import UniqueConstraint
+from sqlalchemy.orm import relationship
 
 db = SQLAlchemy()
 
-class User(db.model):
+class User(db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(128), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=True)
+    password_hash = db.Column(db.String(128), nullable=False)
 
     avatar_url = db.Column(db.String(200), default='')
     display_name = db.Column(db.String(100), nullable=True)
     total_steps_life = db.Column(db.Integer, default=0, nullable=False)
+    current_journey_id = db.Column(db.Integer, db.ForeignKey('journeys.id'), nullable=True)
 
     step_logs = db.relationship('StepLog', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     current_journey = db.relationship('Journey', foreign_keys=[current_journey_id])
@@ -23,9 +24,9 @@ class User(db.model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_active = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def __init__(self, username, password, **kwargs):
+    def __init__(self, username, password_hash, **kwargs):
         self.username = username
-        self.password = password
+        self.password_hash = password_hash
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -39,12 +40,10 @@ class User(db.model):
             'username': self.username,
             'display_name': self.display_name or self.username,
             'avatar_url': self.avatar_url,
-            'bio': self.bio,
             'total_steps_life': self.total_steps_life,
             'current_journey_id': self.current_journey_id,
             'created_at': self.created_at.isoformat(),
-            'last_active': self.last_active.isoformat(),
-            'is_public': self.is_public
+            'last_active': self.last_active.isoformat()
         }
         if include_sensitive:
             data['email'] = self.email
@@ -62,7 +61,7 @@ class User(db.model):
             log = self.step_logs.filter_by(date=today).first()
             if log and log.steps_count > 0:
                 streak += 1
-                today = today.replace(day=today.day - 1)
+                today = today - timedelta(days=1)
             else:
                 break
         return streak
@@ -71,7 +70,7 @@ class StepLog(db.Model):
     __tablename__ = 'step_logs'
     id = db.Column(db.Integer, primary_key=True)
 
-    user_id = db.Column(db.Float, nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
 
     steps_count = db.Column(db.Integer, nullable=False, default = 0)
     distance_miles = db.Column(db.Float, nullable=True)
@@ -80,15 +79,16 @@ class StepLog(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     source = db.Column(db.String(50), default='healthkit')
+    __table_args__ = (UniqueConstraint('user_id', 'date', name='unique_user_date'),)
 
     def __init__(self, user_id, steps_count, date=None, **kwargs):
         self.user_id = user_id
         self.steps_count = steps_count
         self.date = date or date.today()
 
-        #Something for distance_miles
+        self.distance_miles = steps_count / 2000
 
-        for key, value in kwargs:
+        for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
@@ -107,7 +107,7 @@ class StepLog(db.Model):
         }
 
 class Journey(db.Model):
-    __tablename__ = 'friendships'
+    __tablename__ = 'journeys'
     id = db.Column(db.Integer, primary_key=True)
 
     start_city = db.Column(db.String(100), nullable=False)
@@ -118,7 +118,7 @@ class Journey(db.Model):
     personal_progress_miles = db.Column(db.Float, default=0.0, nullable=False)
 
     status = db.Column(db.String(20), default='In Progress')
-    difficulty = db.Column(db.string(20), default='Medium')
+    difficulty = db.Column(db.String(20), default='Medium')
 
     is_active = db.Column(db.Boolean, default=True)
 
@@ -148,7 +148,7 @@ class Journey(db.Model):
             'status': self.status,
             'difficulty': self.difficulty,
             'is_active': self.is_active,
-            'created_at': self.created_at.isoformat(),
+            'created_at': self.started_at.isoformat(),
             'progress_percentage': self.get_progress_percentage(),
         }
 
@@ -172,7 +172,7 @@ class Boss(db.Model):
     image_url = db.Column(db.String(200), nullable=True)
 
     max_health = db.Column(db.Integer, nullable=False)
-    current_health = db.column(db.Integer, nullable=False)
+    current_health = db.Column(db.Integer, nullable=False)
 
     exp_reward = db.Column(db.Integer, nullable=False)
     coin_reward = db.Column(db.Integer, default=0)
@@ -189,6 +189,11 @@ class Boss(db.Model):
 
     def __repr__(self):
         return f'Boss {self.name}: {self.current_health}/{self.max_health} HP'
+
+    def get_health_percentage(self):
+        if self.max_health == 0:
+            return 0
+        return (self.current_health/self.max_health) * 100
 
     def take_damage(self, steps):
         damage = steps
@@ -271,7 +276,7 @@ class UserLevel(db.Model):
             'last_levelup': self.last_levelup.isoformat() if self.last_levelup else None
         }
 
-class BossAttack(db.model):
+class BossAttack(db.Model):
     __tablename__ = 'boss_attacks'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -296,11 +301,11 @@ class BossAttack(db.model):
             'attacked_at': self.attacked_at.isoformat()
         }
 
-class BossManager(db.Model):
+class BossManager:
     @staticmethod
     def attack_boss(user, boss_id, steps_to_use):
         boss = Boss.query.get(boss_id)
-        if not boss or boss.is_active or boss.is_defeated():
+        if not boss or not boss.is_active or boss.is_defeated():
             return {'error': 'Boss not available for attack'}
 
         user_level = UserLevel.query.filter_by(user_id=user.id).first()
@@ -342,7 +347,7 @@ class BossManager(db.Model):
 
     @staticmethod
     def schedule_boss_respawn(boss):
-        respawn_time = datetime.utcnow() + datetime.timedelta(hours=boss.respawn_hours)
+        respawn_time = datetime.utcnow() + timedelta(hours=boss.respawn_hours)
 
     @staticmethod
     def handle_boss_defeat(boss, defeating_user):
@@ -400,7 +405,7 @@ class Friendship(db.Model):
     sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_requests')
     receiver = db.relationship('User', foreign_keys=[receiver_id], backref='received_requests')
 
-    __table_args__ = (UniqueConstraint('sender_id', 'receiver_id', name='unique_friendship'))
+    __table_args__ = (UniqueConstraint('sender_id', 'receiver_id', name='unique_friendship'),)
 
     def __repr__(self):
         return f'Friendship from {self.sender_id} to {self.receiver_id} ({self.status})'
@@ -446,7 +451,7 @@ class UserAchievement(db.Model):
     user = db.relationship('User', backref='earned_achievements')
     achievement = db.relationship('Achievement', backref='earned_by_users')
 
-    __table_args__ = (UniqueConstraint('user_id', 'achievement_id', name='unique_user_achievement'))
+    __table_args__ = (UniqueConstraint('user_id', 'achievement_id', name='unique_user_achievement'),)
 
     def __repr__(self):
         return f'UserAchievement {self.user}: {self.achievement}'
@@ -457,21 +462,18 @@ DAILY_BOSS_TEMPLATES = [
     {
         'name': 'Shadow Walker',
         'description': 'A mysterious figure that feeds on inactivity. Defeat it with your daily steps!',
-        'emoji': '👤',
         'health': 10000,
         'exp_reward': 500
     },
     {
         'name': 'Couch Demon',
         'description': 'This lazy demon wants you to stay seated all day. Show it who\'s boss!',
-        'emoji': '😈',
         'health': 8000,
         'exp_reward': 400
     },
     {
         'name': 'Procrastination Beast',
         'description': 'It grows stronger the longer you wait. Attack now!',
-        'emoji': '🐉',
         'health': 12000,
         'exp_reward': 600
     }
@@ -481,14 +483,12 @@ JOURNEY_BOSS_TEMPLATES = {
     'New York City': {
         'name': 'Traffic Monster',
         'description': 'A beast born from NYC gridlock. Only walking can tame it!',
-        'emoji': '🚗',
         'health': 25000,
         'exp_reward': 1000
     },
     'Los Angeles': {
         'name': 'Smog Giant',
         'description': 'Clear the air with your steps!',
-        'emoji': '🌫️',
         'health': 30000,
         'exp_reward': 1200
     }
@@ -498,8 +498,7 @@ LEGENDARY_BOSSES = [
     {
         'name': 'The Sedentary King',
         'description': 'The ultimate enemy of all walkers. A legendary challenge!',
-        'emoji': '👑',
-        'health': 1000000,  # 1 million steps needed!
+        'health': 1000000,
         'exp_reward': 10000,
         'difficulty': 'Legendary'
     }
